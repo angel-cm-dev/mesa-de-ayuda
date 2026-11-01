@@ -1,0 +1,57 @@
+# Levanta todo el sistema con un comando:  docker compose up --build
+# Frontend: http://localhost:8080   ·   API/Swagger: http://localhost:3000/api/docs
+name: mesa-de-ayuda
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-helpdesk}
+      POSTGRES_USER: ${POSTGRES_USER:-helpdesk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_CLIENT: pg
+      DATABASE_URL: postgres://${POSTGRES_USER:-helpdesk}:${POSTGRES_PASSWORD:-helpdesk}@db:5432/${POSTGRES_DB:-helpdesk}
+      JWT_SECRET: ${JWT_SECRET:-solo-demo-cambia-esta-clave-de-32-caracteres-min}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      UPLOAD_DIR: /app/uploads
+      SEED_DEMO: ${SEED_DEMO:-true}
+      AUTO_ASSIGN_ON_CREATE: ${AUTO_ASSIGN_ON_CREATE:-false}
+      SLA_MONITOR_INTERVAL_MS: ${SLA_MONITOR_INTERVAL_MS:-60000}
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
+  uploads:
